@@ -1,45 +1,40 @@
 const express = require('express');
-const bodyParser = require('body-parser');
+const axios = require('axios'); // ดึง HTML จาก URL
 const cheerio = require('cheerio');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(bodyParser.text({ type: 'text/html' }));
-
-// ฟังก์ชันช่วยดึงข้อความจาก selector โดยมี fallback
+// ฟังก์ชันช่วยดึงข้อความจาก selector โดย fallback
 const safeText = (element, selector) => {
   const found = element.find(selector);
   return found.length ? found.text().trim() : null;
 };
 
-// ฟังก์ชันช่วยดึง attribute ของ element โดยมี fallback
 const safeAttr = (element, selector, attr) => {
   const found = element.find(selector);
   return found.length ? found.attr(attr) || null : null;
 };
 
-app.post('/parse-executors', (req, res) => {
-  const html = req.body;
+// GET /parse-executors?url=...
+app.get('/parse-executors', async (req, res) => {
+  const { url } = req.query;
 
-  if (!html || typeof html !== 'string') {
-    return res.status(400).json({ success: false, message: "No HTML provided or invalid format" });
-  }
+  if (!url) return res.status(400).json({ success: false, message: "Missing URL parameter" });
 
   try {
+    // ดึง HTML จาก URL
+    const response = await axios.get(url);
+    const html = response.data;
+
     const $ = cheerio.load(html);
     const executorCards = $('.executor-card');
 
-    if (!executorCards.length) {
-      return res.json({ success: true, executors: [] });
-    }
+    if (!executorCards.length) return res.json({ success: true, executors: [] });
 
     const executors = [];
-
-    // ดึงข้อมูลทั้งหมดก่อน แล้วค่อยดัดแปลง
     executorCards.each((i, el) => {
       const card = $(el);
-
       const executor = {
         name: safeText(card, '.executor-info h3') || "Unknown",
         version: safeText(card, '.detail-item:contains("Version") .detail-value') || "N/A",
@@ -51,18 +46,15 @@ app.post('/parse-executors', (req, res) => {
         },
         logo: safeAttr(card, '.executor-logo', 'src') || null
       };
-
       executors.push(executor);
     });
 
     res.json({ success: true, executors });
 
   } catch (error) {
-    console.error("Error parsing HTML:", error);
-    res.status(500).json({ success: false, message: "Error parsing HTML", error: error.message });
+    console.error("Error fetching or parsing URL:", error.message);
+    res.status(500).json({ success: false, message: "Error fetching or parsing URL", error: error.message });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Advanced Executor Parser API running on http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`Executor Parser API running on port ${PORT}`));

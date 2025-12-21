@@ -21,31 +21,39 @@ const detectPlatform = (url) => {
   return "Unknown";
 };
 
+const cleanVersion = (version) => {
+  const match = version.match(/(\d+\.\d+\.\d+)/);
+  return match ? match[0] : version;
+};
+
+const isOnline = (element) => {
+  const statusText = deepText(element, '.detail-item:contains("Status") .status');
+  return statusText.toLowerCase().includes("online");
+};
+
 app.get('/executors', async (req, res) => {
   try {
     const response = await axios.get(TARGET_URL);
     const $ = cheerio.load(response.data);
 
-    const categories = { Android: [], iOS: [], Windows: [], MacOS: [] };
+    const categories = { Android: [], iOS: [], Windows: [], MacOS: [], Unknown: [] };
 
     $('.executor-card').each((i, el) => {
       const card = $(el);
 
-      const name = deepText(card, '.executor-info h3');
-      const version = deepText(card, '.detail-item:contains("Version") .detail-value');
-      const status = deepText(card, '.detail-item:contains("Status") .status');
+      if (!isOnline(card)) return;
 
-      let downloadLink = card.find('.card-actions a[href]').first().attr('href') || null;
+      const name = deepText(card, '.executor-info h3');
+      const versionRaw = deepText(card, '.detail-item:contains("Version") .detail-value');
+      const version = cleanVersion(versionRaw);
+
+      const downloadLink = card.find('.card-actions a[href]').first().attr('href') || null;
       const platform = detectPlatform(downloadLink);
 
-      const executorData = { name, version, status, downloadLink };
+      const executorData = { name, version, status: "Online", downloadLink };
 
-      if (platform in categories) {
-        categories[platform].push(executorData);
-      } else {
-        if (!categories.Unknown) categories.Unknown = [];
-        categories.Unknown.push(executorData);
-      }
+      categories[platform] = categories[platform] || [];
+      categories[platform].push(executorData);
     });
 
     res.json({ success: true, categories });

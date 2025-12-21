@@ -12,9 +12,9 @@ const deepText = (element, selector) => {
 };
 
 const detectPlatform = (url, name) => {
-  if (!url) return "Unknown";
-  const lowerUrl = url.toLowerCase();
-  const lowerName = name.toLowerCase();
+  if (!url && !name) return "Unknown";
+  const lowerUrl = (url || "").toLowerCase();
+  const lowerName = (name || "").toLowerCase();
 
   if (lowerUrl.endsWith(".apk") || lowerName.includes("android") || lowerUrl.includes("android")) return "Android";
   if (lowerUrl.endsWith(".ipa") || lowerName.includes("ios") || lowerUrl.includes("ios")) return "iOS";

@@ -12,7 +12,7 @@ const safeText = (element, selector) => {
   return found.length ? found.text().trim() : "N/A";
 };
 
-app.get('/parse-executors', async (req, res) => {
+app.get('/executors', async (req, res) => {
   try {
     const response = await axios.get(TARGET_URL);
     const $ = cheerio.load(response.data);
@@ -30,7 +30,6 @@ app.get('/parse-executors', async (req, res) => {
       });
     });
 
-    // จัดเรียงให้ Online มาก่อน Offline
     executors.sort((a, b) => {
       const statusOrder = { "Online": 1, "Offline": 0 };
       const aStatus = a.status.includes("Online") ? 1 : 0;

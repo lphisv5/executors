@@ -11,13 +11,16 @@ const deepText = (element, selector) => {
   return found.length ? found.text().replace(/\s+/g, ' ').trim() : "N/A";
 };
 
-const detectPlatform = (url) => {
+const detectPlatform = (url, name) => {
   if (!url) return "Unknown";
-  url = url.toLowerCase();
-  if (url.endsWith(".apk") || url.includes("android")) return "Android";
-  if (url.endsWith(".ipa") || url.includes("ios")) return "iOS";
-  if (url.endsWith(".exe") || url.includes("windows")) return "Windows";
-  if (url.endsWith(".dmg") || url.includes("macos") || url.includes("mac")) return "MacOS";
+  const lowerUrl = url.toLowerCase();
+  const lowerName = name.toLowerCase();
+
+  if (lowerUrl.endsWith(".apk") || lowerName.includes("android") || lowerUrl.includes("android")) return "Android";
+  if (lowerUrl.endsWith(".ipa") || lowerName.includes("ios") || lowerUrl.includes("ios")) return "iOS";
+  if (lowerUrl.endsWith(".exe") || lowerUrl.endsWith(".msi") || lowerName.includes("windows") || lowerUrl.includes("windows")) return "Windows";
+  if (lowerUrl.endsWith(".dmg") || lowerName.includes("mac") || lowerUrl.includes("macos") || lowerUrl.includes("mac")) return "MacOS";
+
   return "Unknown";
 };
 

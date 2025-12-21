@@ -31,7 +31,17 @@ const isOnline = (element) => {
   return statusText.toLowerCase().includes("online");
 };
 
-app.get('/executors', async (req, res) => {
+const parseDownloads = (text) => {
+  if (!text || text === "N/A") return 0;
+  text = text.replace(/\+/g, '').toUpperCase();
+  let num = 0;
+  if (text.endsWith("K")) num = parseFloat(text) * 1000;
+  else if (text.endsWith("M")) num = parseFloat(text) * 1000000;
+  else num = parseFloat(text);
+  return isNaN(num) ? 0 : num;
+};
+
+app.get('/parse-executors', async (req, res) => {
   try {
     const response = await axios.get(TARGET_URL);
     const $ = cheerio.load(response.data);
@@ -50,11 +60,19 @@ app.get('/executors', async (req, res) => {
       const downloadLink = card.find('.card-actions a[href]').first().attr('href') || null;
       const platform = detectPlatform(downloadLink);
 
-      const executorData = { name, version, status: "Online", downloadLink };
+      const downloadsText = deepText(card, '.detail-item:contains("Downloads") .detail-value');
+      const downloads = parseDownloads(downloadsText);
+
+      const executorData = { name, version, status: "Online", downloadLink, downloads };
 
       categories[platform] = categories[platform] || [];
       categories[platform].push(executorData);
     });
+
+    for (const key in categories) {
+      categories[key].sort((a, b) => b.downloads - a.downloads);
+      categories[key] = categories[key].map(({ downloads, ...rest }) => rest);
+    }
 
     res.json({ success: true, categories });
 

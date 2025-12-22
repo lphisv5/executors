@@ -12,7 +12,7 @@ const deepText = (element, selector) => {
 };
 
 const cleanVersion = (version) => {
-  const match = version.match(/(\d+\.\d+\.\d+)/);
+  const match = version.match(/^(\d+\.\d+\.\d+)/);
   return match ? match[0] : version;
 };
 

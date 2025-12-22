@@ -11,6 +11,7 @@ const deepText = (element, selector) => {
   return found.length ? found.text().replace(/\s+/g, ' ').trim() : "N/A";
 };
 
+// ตัดเวอร์ชันให้เหลือแค่ x.y.z
 const cleanVersion = (version) => {
   const match = version.match(/(\d+\.\d+\.\d+)/);
   if (match) return match[0];
@@ -24,16 +25,6 @@ const isOnline = (element) => {
   return statusText.toLowerCase().includes("online");
 };
 
-const parseDownloads = (text) => {
-  if (!text || text === "N/A") return 0;
-  text = text.replace(/\+/g, '').toUpperCase();
-  let num = 0;
-  if (text.endsWith("K")) num = parseFloat(text) * 1000;
-  else if (text.endsWith("M")) num = parseFloat(text) * 1000000;
-  else num = parseFloat(text);
-  return isNaN(num) ? 0 : num;
-};
-
 app.get('/executors', async (req, res) => {
   try {
     const response = await axios.get(TARGET_URL);
@@ -43,6 +34,7 @@ app.get('/executors', async (req, res) => {
 
     $('.executor-card').each((i, el) => {
       const card = $(el);
+
       if (!isOnline(card)) return;
 
       const name = deepText(card, '.executor-info h3');
@@ -50,15 +42,10 @@ app.get('/executors', async (req, res) => {
       const version = cleanVersion(versionRaw);
       const downloadLink = card.find('.card-actions a[href]').first().attr('href') || null;
 
-      const downloadsText = deepText(card, '.detail-item:contains("Downloads") .detail-value');
-      const downloads = parseDownloads(downloadsText);
-
-      executors.push({ name, version, status: "Online", downloadLink, downloads });
+      executors.push({ name, version, status: "Online", downloadLink });
     });
 
-    executors.sort((a, b) => b.downloads - a.downloads);
-    executors.forEach(e => delete e.downloads);
-
+    // คืนลำดับเหมือนในเว็บ
     res.json({ success: true, executors });
 
   } catch (err) {

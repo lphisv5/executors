@@ -6,87 +6,117 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const TARGET_URL = 'https://executors.samrat.lol';
 
-const cleanVersion = (version) => {
-  if (!version) return null;
-  const match = version.match(/[\d\.]+/); // ดึงเลขและจุดทั้งหมด
-  return match ? match[0] : version;
+// ดึงข้อความลึกจาก selector
+const getText = (el, selector) => {
+  const found = el.find(selector);
+  return found.length ? found.text().replace(/\s+/g, ' ').trim() : null;
 };
 
-// ตรวจสอบ Android
-const isAndroid = (link) => link && link.toLowerCase().includes('android');
-
-// ตรวจสอบ status Online/Offline
-const getStatus = (card) => {
-  const statusText = card.find('.detail-item:contains("Status") .status').text();
-  return statusText && statusText.toLowerCase().includes('online') ? 'Online' : 'Offline';
+// ตรวจสถานะ Online / Offline
+const parseStatus = (el) => {
+  const status = getText(el, '.detail-item:contains("Status") .status');
+  return status ? status.replace(/\s+/g, '') : 'Offline';
 };
 
-// ดึงข้อความ
-const getText = (card, selector) => {
-  const el = card.find(selector);
-  return el.length ? el.text().replace(/\s+/g, ' ').trim() : null;
+// ตรวจ VNG Status
+const parseVngStatus = (el) => {
+  const status = getText(el, '.detail-item:contains("VNG Status") .status');
+  return status ? status.replace(/\s+/g, '') : null;
 };
 
-// ดึงลิงก์ VNG Android ล่าสุด (fallback)
-const getVNG = (card) => {
-  const vngCards = card.find('.vng a[href]');
-  if (!vngCards.length) return null;
+// ดึง version เต็มจาก text (รวมทั้ง Android + VNG)
+const parseVersion = (text) => {
+  return text ? text.replace(/\s+/g, '') : null;
+};
 
-  let selectedLink = null;
-  let selectedVersion = null;
+// หาลิงก์หลัก
+const parseDownloadLink = (el, idx = 0) =>
+  el.find('.card-actions a[href]').eq(idx).attr('href') || null;
 
-  vngCards.each((i, el) => {
-    const link = cheerio(el).attr('href');
-    const versionRaw = getText(card, '.vng .version');
-    const version = cleanVersion(versionRaw);
+// หา VNG link ทั้งหมด
+const parseAllVngLinks = (el) => {
+  return el
+    .find('.card-actions a[href]')
+    .toArray()
+    .map((a) => cheerio(a).attr('href'))
+    .filter((l, i) => i > 0); // skip index 0 (main download)
+};
 
-    // ถ้าไม่มี version เลือกลิงก์ล่าสุดเป็น fallback
-    if (!selectedVersion || (version && version > selectedVersion)) {
-      selectedVersion = version;
-      selectedLink = link;
-    }
-  });
-
-  if (!selectedLink) return null;
-  return {
-    vngVersion: selectedVersion,
-    vngDownloadLink: selectedLink,
-    vngStatus: getStatus(card)
-  };
+// ตัดเฉพาะ version number pattern
+const extractVerNumber = (ver) => {
+  if (!ver) return null;
+  const match = ver.match(/(\d+\.\d+\.\d+)/g);
+  return match ? match.join('.') : ver;
 };
 
 app.get('/executors', async (req, res) => {
   try {
-    const response = await axios.get(TARGET_URL);
-    const $ = cheerio.load(response.data);
+    const { data } = await axios.get(TARGET_URL);
+    const $ = cheerio.load(data);
 
     const online = [];
     const offline = [];
 
-    $('.executor-card').each((i, el) => {
+    $('.executor-card').each((_, el) => {
       const card = $(el);
 
-      const name = getText(card, '.executor-info h3');
-      const versionRaw = getText(card, '.detail-item:contains("Version") .detail-value');
-      const version = cleanVersion(versionRaw);
-      const downloadLink = card.find('.card-actions a[href]').first().attr('href');
-      const status = getStatus(card);
+      const name = getText(card, '.executor-info h3') || 'Unknown';
+      const status = parseStatus(card);
 
-      const executor = { name, version, status, downloadLink };
+      const mainDownload = parseDownloadLink(card, 0);
 
-      if (isAndroid(downloadLink)) {
-        const vng = getVNG(card);
-        if (vng) Object.assign(executor, vng);
+      // version หลัก + vngVersion
+      const rawVersion = getText(card, '.detail-item:contains("Version") .detail-value');
+      const rawVngVersion = getText(card, '.detail-item:contains("VNG Version") .detail-value');
+
+      let version = rawVersion ? parseVersion(rawVersion) : null;
+      let vngVersion = rawVngVersion ? parseVersion(rawVngVersion) : null;
+
+      // หา VNG Links
+      const vngLinks = parseAllVngLinks(card);
+
+      // ถ้ามี VNG versions & links เยอะให้จับคู่ให้ใกล้เคียงก่อน
+      let bestVngLink = null;
+      if (vngLinks.length) {
+        // ถ้ามี vngVersion
+        if (vngVersion) {
+          const matched = vngLinks.find((l) =>
+            l.toLowerCase().includes(vngVersion.toLowerCase())
+          );
+          bestVngLink = matched || vngLinks[0]; // ถ้าไม่มีตรง version เอา fallback ตัวแรก
+        } else {
+          // ไม่มี vngVersion เลย → fallback ตัวแรก
+          bestVngLink = vngLinks[0];
+        }
       }
 
-      status === 'Online' ? online.push(executor) : offline.push(executor);
+      const executorData = {
+        name,
+        version: extractVerNumber(version) || version,
+        status,
+        downloadLink: mainDownload,
+      };
+
+      // ถ้าเป็น Android และมี VNG link ให้ใส่
+      if (mainDownload && mainDownload.toLowerCase().includes('android') && bestVngLink) {
+        executorData.vngDownloadLink = bestVngLink;
+        if (vngVersion) executorData.vngVersion = extractVerNumber(vngVersion) || vngVersion;
+        const vngStatus = parseVngStatus(card);
+        if (vngStatus) executorData.vngStatus = vngStatus;
+      }
+
+      if (status.toLowerCase() === 'online') online.push(executorData);
+      else offline.push(executorData);
     });
 
     res.json({ success: true, online, offline });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: 'Failed to fetch or parse site', error: err.message });
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch or parse site',
+      error: err.message,
+    });
   }
 });
 
-app.listen(PORT, () => console.log(`Executor Parser API running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Executor Parser API running on ${PORT}`));

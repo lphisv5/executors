@@ -20,21 +20,21 @@ const cleanVersion = (version) => {
   return match ? match[0] : version;
 };
 
-// ตรวจสอบสถานะ Online/Offline
-const getStatus = (element) => {
-  const status = deepText(element, '.detail-item:contains("Status") .status');
-  const vngStatus = deepText(element, '.detail-item:contains("VNG Status") .status');
+// ดึงสถานะ Online/Offline
+const getStatuses = (element) => {
+  const status = deepText(element, '.detail-item:contains("Status") .status') || "Offline";
+  const vngStatus = deepText(element, '.detail-item:contains("VNG Status") .status') || "Offline";
   return {
-    status: status || "Offline",
-    vngStatus: vngStatus || "Offline"
+    status: status.replace(/\s+/g, ""),
+    vngStatus: vngStatus.replace(/\s+/g, "")
   };
 };
 
 // ดึงเวอร์ชันหลัก + VNG Version
 const getVersions = (element) => {
   const version = cleanVersion(deepText(element, '.detail-item:contains("Version") .detail-value'));
-  const vngVersion = deepText(element, '.detail-item:contains("VNG Version") .detail-value');
-  return { version, vngVersion };
+  const vngVersion = cleanVersion(deepText(element, '.detail-item:contains("VNG Version") .detail-value'));
+  return { version, vngVersion: vngVersion || "N/A" };
 };
 
 app.get('/executors', async (req, res) => {
@@ -50,16 +50,16 @@ app.get('/executors', async (req, res) => {
 
       const name = deepText(card, '.executor-info h3');
       const { version, vngVersion } = getVersions(card);
-      const { status, vngStatus } = getStatus(card);
+      const { status, vngStatus } = getStatuses(card);
 
       const downloadLink = card.find('.card-actions a[href]').first().attr('href') || null;
-      const vngDownloadLink = card.find('.card-actions a[href]').eq(1).attr('href') || null; // ลิงค์ VNG ปกติเป็นปุ่มที่สอง
+      const vngDownloadLink = card.find('.card-actions a[href]').eq(1).attr('href') || null;
 
       const executorData = {
         name,
         version,
-        vngVersion: vngVersion || null,
-        status,
+        vngVersion,
+        status: status + vngStatus.includes("Online") ? "Online" : "",
         vngStatus,
         downloadLink,
         vngDownloadLink

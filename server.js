@@ -6,23 +6,35 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const TARGET_URL = 'https://executors.samrat.lol';
 
+// ดึงข้อความภายใน element
 const deepText = (element, selector) => {
   const found = element.find(selector);
   return found.length ? found.text().replace(/\s+/g, ' ').trim() : "N/A";
 };
 
-// ตัดเวอร์ชันให้เหลือแค่ x.y.z
+// แปลง version ให้เหลือเฉพาะหลัก 3 หลัก เช่น 2.701.966
 const cleanVersion = (version) => {
+  if (!version) return "N/A";
+  if (version.startsWith("version-")) return version;
   const match = version.match(/(\d+\.\d+\.\d+)/);
-  if (match) return match[0];
-  const altMatch = version.match(/version-(\d{1,3}\.\d{1,3}\.\d{1,3})/);
-  if (altMatch) return altMatch[1];
-  return version;
+  return match ? match[0] : version;
 };
 
-const isOnline = (element) => {
-  const statusText = deepText(element, '.detail-item:contains("Status") .status');
-  return statusText.toLowerCase().includes("online");
+// ตรวจสอบสถานะ Online/Offline
+const getStatus = (element) => {
+  const status = deepText(element, '.detail-item:contains("Status") .status');
+  const vngStatus = deepText(element, '.detail-item:contains("VNG Status") .status');
+  return {
+    status: status || "Offline",
+    vngStatus: vngStatus || "Offline"
+  };
+};
+
+// ดึงเวอร์ชันหลัก + VNG Version
+const getVersions = (element) => {
+  const version = cleanVersion(deepText(element, '.detail-item:contains("Version") .detail-value'));
+  const vngVersion = deepText(element, '.detail-item:contains("VNG Version") .detail-value');
+  return { version, vngVersion };
 };
 
 app.get('/executors', async (req, res) => {
@@ -30,23 +42,34 @@ app.get('/executors', async (req, res) => {
     const response = await axios.get(TARGET_URL);
     const $ = cheerio.load(response.data);
 
-    const executors = [];
+    const online = [];
+    const offline = [];
 
     $('.executor-card').each((i, el) => {
       const card = $(el);
 
-      if (!isOnline(card)) return;
-
       const name = deepText(card, '.executor-info h3');
-      const versionRaw = deepText(card, '.detail-item:contains("Version") .detail-value');
-      const version = cleanVersion(versionRaw);
-      const downloadLink = card.find('.card-actions a[href]').first().attr('href') || null;
+      const { version, vngVersion } = getVersions(card);
+      const { status, vngStatus } = getStatus(card);
 
-      executors.push({ name, version, status: "Online", downloadLink });
+      const downloadLink = card.find('.card-actions a[href]').first().attr('href') || null;
+      const vngDownloadLink = card.find('.card-actions a[href]').eq(1).attr('href') || null; // ลิงค์ VNG ปกติเป็นปุ่มที่สอง
+
+      const executorData = {
+        name,
+        version,
+        vngVersion: vngVersion || null,
+        status,
+        vngStatus,
+        downloadLink,
+        vngDownloadLink
+      };
+
+      if (status.toLowerCase().includes("online")) online.push(executorData);
+      else offline.push(executorData);
     });
 
-    // คืนลำดับเหมือนในเว็บ
-    res.json({ success: true, executors });
+    res.json({ success: true, online, offline });
 
   } catch (err) {
     console.error(err);

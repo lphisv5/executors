@@ -6,10 +6,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const TARGET_URL = 'https://executors.samrat.lol';
 
-// clean version ให้เป็น x.x.x
 const cleanVersion = (version) => {
   if (!version) return null;
-  const match = version.match(/\d+\.\d+\.\d+/);
+  const match = version.match(/[\d\.]+/); // ดึงเลขและจุดทั้งหมด
   return match ? match[0] : version;
 };
 

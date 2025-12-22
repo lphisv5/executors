@@ -6,93 +6,49 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const TARGET_URL = 'https://executors.samrat.lol';
 
-// ฟังก์ชันดึงข้อความ
-const getText = (el, selector) => {
-  const found = el.find(selector);
-  return found.length ? found.text().trim() : null;
+const deepText = (element, selector) => {
+  const found = element.find(selector);
+  return found.length ? found.text().replace(/\s+/g, ' ').trim() : "N/A";
 };
 
-// ฟังก์ชันดึงลิงก์
-const getLink = (el, idx = 0) => {
-  const a = el.find('.card-actions a[href]').eq(idx);
-  return a.length ? a.attr('href') : null;
+const cleanVersion = (version) => {
+  const match = version.match(/(\d+\.\d+\.\d+)/);
+  if (match) return match[0];
+  const altMatch = version.match(/version-(\d{1,3}\.\d{1,3}\.\d{1,3})/);
+  if (altMatch) return altMatch[1];
+  return version;
 };
 
-// ตรวจสถานะ
-const parseStatus = (el, label) => {
-  const text = getText(el, `.detail-item:contains("${label}") .status`);
-  return text ? text.replace(/\s+/g, '') : null;
+const isOnline = (element) => {
+  const statusText = deepText(element, '.detail-item:contains("Status") .status');
+  return statusText.toLowerCase().includes("online");
 };
 
 app.get('/executors', async (req, res) => {
   try {
-    // โหลด HTML จากเว็บ
-    const { data } = await axios.get(TARGET_URL);
-    const $ = cheerio.load(data);
+    const response = await axios.get(TARGET_URL);
+    const $ = cheerio.load(response.data);
 
-    const online = [];
-    const offline = [];
+    const executors = [];
 
-    $('.executor-card').each((_, cardEl) => {
-      const card = $(cardEl);
+    $('.executor-card').each((i, el) => {
+      const card = $(el);
 
-      // ชื่อ executor
-      const name = getText(card, '.executor-info h3') || '';
+      if (!isOnline(card)) return;
 
-      // สถานะ Online / Offline
-      const status = parseStatus(card, 'Status') || 'Offline';
+      const name = deepText(card, '.executor-info h3');
+      const versionRaw = deepText(card, '.detail-item:contains("Version") .detail-value');
+      const version = cleanVersion(versionRaw);
+      const downloadLink = card.find('.card-actions a[href]').first().attr('href') || null;
 
-      // ดึง version เต็มของทั้ง Android และ VNG ถ้ามี
-      const versionMain = getText(card, '.detail-item:contains("Version") .detail-value');
-      const versionVNG = getText(card, '.detail-item:contains("VNG Version") .detail-value');
-
-      // ลิงก์หลัก และลิงก์ VNG fallback
-      const downloadLink = getLink(card, 0);
-
-      // หา VNG links ทุกตัวจากปุ่มต่าง ๆ
-      const allLinks = card.find('.card-actions a[href]').toArray().map(a => $(a).attr('href'));
-      let vngDownloadLink = null;
-
-      if (allLinks.length > 1) {
-        // btn ที่สองมักเป็น VNG
-        vngDownloadLink = allLinks[1] || null;
-      }
-
-      // รวม version แบบ x.y.z…x.y.z
-      let version = versionMain;
-      if (versionVNG) {
-        version = `${versionMain}${versionVNG}`;
-      }
-
-      // ผลลัพธ์ object
-      const executorData = {
-        name,
-        version,
-        status,
-        downloadLink
-      };
-
-      // เพิ่ม VNG info ก็ต่อเมื่อมีจริง ๆ
-      if (vngDownloadLink && versionVNG) {
-        executorData.vngVersion = versionVNG;
-        executorData.vngDownloadLink = vngDownloadLink;
-        const vngStatus = parseStatus(card, 'VNG Status');
-        if (vngStatus) executorData.vngStatus = vngStatus;
-      }
-
-      // แยก Online / Offline ตามสถานะจริง
-      if (status.toLowerCase() === 'online') online.push(executorData);
-      else offline.push(executorData);
+      executors.push({ name, version, status: "Online", downloadLink });
     });
 
-    res.json({ success: true, online, offline });
+    res.json({ success: true, executors });
+
   } catch (err) {
     console.error(err);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch or parse site',
-      error: err.message
-    });
+    res.status(500).json({ success: false, message: "Failed to fetch or parse site", error: err.message });
   }
 });
 

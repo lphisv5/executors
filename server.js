@@ -12,8 +12,11 @@ const deepText = (element, selector) => {
 };
 
 const cleanVersion = (version) => {
-  const match = version.match(/^(\d+\.\d+\.\d+)/);
-  return match ? match[0] : version;
+  const match = version.match(/(\d+\.\d+\.\d+)/);
+  if (match) return match[0];
+  const altMatch = version.match(/version-(\d{1,3}\.\d{1,3}\.\d{1,3})/);
+  if (altMatch) return altMatch[1];
+  return version;
 };
 
 const isOnline = (element) => {

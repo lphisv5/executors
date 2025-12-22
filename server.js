@@ -6,38 +6,53 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const TARGET_URL = 'https://executors.samrat.lol';
 
-// ฟังก์ชันดึงข้อความลึกจาก element
-const deepText = (element, selector) => {
-  const found = element.find(selector);
-  return found.length ? found.text().replace(/\s+/g, ' ').trim() : null;
-};
-
-// ฟังก์ชันตรวจสอบสถานะ Online
-const isOnline = (element) => {
-  const statusText = deepText(element, '.detail-item:contains("Status") .status');
-  if (!statusText) return false;
-  return statusText.toLowerCase().includes('online');
-};
-
-// ฟังก์ชันแยก version Android
+// clean version ให้เป็น x.x.x
 const cleanVersion = (version) => {
   if (!version) return null;
   const match = version.match(/\d+\.\d+\.\d+/);
   return match ? match[0] : version;
 };
 
-// ฟังก์ชันตรวจสอบว่าเป็น Android
+// ตรวจสอบ Android
 const isAndroid = (link) => link && link.toLowerCase().includes('android');
 
-// ฟังก์ชันตรวจสอบ VNG สำหรับ Android
-const extractVNG = (card) => {
-  const vngLink = card.find('.vng a[href]').first().attr('href');
-  const vngVersionRaw = deepText(card, '.vng .version');
-  if (!vngLink) return null;
+// ตรวจสอบ status Online/Offline
+const getStatus = (card) => {
+  const statusText = card.find('.detail-item:contains("Status") .status').text();
+  return statusText && statusText.toLowerCase().includes('online') ? 'Online' : 'Offline';
+};
+
+// ดึงข้อความ
+const getText = (card, selector) => {
+  const el = card.find(selector);
+  return el.length ? el.text().replace(/\s+/g, ' ').trim() : null;
+};
+
+// ดึงลิงก์ VNG Android ล่าสุด (fallback)
+const getVNG = (card) => {
+  const vngCards = card.find('.vng a[href]');
+  if (!vngCards.length) return null;
+
+  let selectedLink = null;
+  let selectedVersion = null;
+
+  vngCards.each((i, el) => {
+    const link = cheerio(el).attr('href');
+    const versionRaw = getText(card, '.vng .version');
+    const version = cleanVersion(versionRaw);
+
+    // ถ้าไม่มี version เลือกลิงก์ล่าสุดเป็น fallback
+    if (!selectedVersion || (version && version > selectedVersion)) {
+      selectedVersion = version;
+      selectedLink = link;
+    }
+  });
+
+  if (!selectedLink) return null;
   return {
-    vngVersion: vngVersionRaw,
-    vngDownloadLink: vngLink,
-    vngStatus: isOnline(card) ? 'Online' : 'Offline'
+    vngVersion: selectedVersion,
+    vngDownloadLink: selectedLink,
+    vngStatus: getStatus(card)
   };
 };
 
@@ -51,22 +66,21 @@ app.get('/executors', async (req, res) => {
 
     $('.executor-card').each((i, el) => {
       const card = $(el);
-      const name = deepText(card, '.executor-info h3');
-      const versionRaw = deepText(card, '.detail-item:contains("Version") .detail-value');
+
+      const name = getText(card, '.executor-info h3');
+      const versionRaw = getText(card, '.detail-item:contains("Version") .detail-value');
       const version = cleanVersion(versionRaw);
       const downloadLink = card.find('.card-actions a[href]').first().attr('href');
-      const status = isOnline(card) ? 'Online' : 'Offline';
+      const status = getStatus(card);
 
       const executor = { name, version, status, downloadLink };
 
-      // สำหรับ Android เพิ่ม VNG ถ้ามี
       if (isAndroid(downloadLink)) {
-        const vng = extractVNG(card);
+        const vng = getVNG(card);
         if (vng) Object.assign(executor, vng);
       }
 
-      if (status === 'Online') online.push(executor);
-      else offline.push(executor);
+      status === 'Online' ? online.push(executor) : offline.push(executor);
     });
 
     res.json({ success: true, online, offline });

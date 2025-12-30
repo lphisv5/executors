@@ -14,37 +14,44 @@ const deepText = (element, selector) => {
 const cleanVersion = (version) => {
   if (!version || version === "N/A") return "N/A";
   
-  // ลบช่องว่างและคำที่ไม่จำเป็น
-  version = version.replace(/\s+/g, '')
-                   .replace(/version:/i, '')
-                   .replace(/v:/i, '')
-                   .replace(/^v/, '');
+  // ทำความสะอาดเบื้องต้น
+  version = version.replace(/\s+/g, ' ').trim();
   
-  // แก้ปัญหา 4 หลักท้าย → 3 หลัก
-  const fixFourDigits = (ver) => {
-    // Pattern: ตัวเลข.ตัวเลข.ตัวเลข 4 หลัก
-    const match = ver.match(/(\d+\.\d+\.\d{3})\d/);
-    return match ? match[1] : ver;
-  };
-  
-  // ลอง format ต่างๆ
-  const patterns = [
-    /(\d+\.\d+\.\d{3})\d/,      // 2.701.9662 → 2.701.966
-    /(\d+\.\d+\.\d{3})/,        // 2.701.966
-    /version-([a-f0-9]{12,})/i, // hash version
-    /(\d+\.\d+\.\d+)/           // อื่นๆ
-  ];
-  
-  for (const pattern of patterns) {
-    const match = version.match(pattern);
-    if (match) {
-      if (pattern.toString().includes('version-')) {
-        return `version-${match[1]}`;
-      }
-      return match[1] || match[0];
-    }
+  // กรณีที่เป็น hash version ที่อาจขึ้นต้นด้วย "ersion" (ผิดพลาดจากต้นทาง)
+  if (version.toLowerCase().includes('ersion')) {
+    // แก้ไขให้ถูกต้อง: เปลี่ยน e เป็น v
+    version = version.replace(/^[eE]/, 'v');
   }
   
+  // ลบคำนำหน้าที่ไม่จำเป็น
+  version = version
+    .replace(/version:/i, '')
+    .replace(/v:/i, '')
+    .replace(/^v\s*/i, '')
+    .trim();
+  
+  // Pattern สำหรับเวอร์ชัน hash (เช่น version-5b077c09380f4fe6)
+  const hashMatch = version.match(/(?:version-|ersion-)?([a-f0-9]{12,})/i);
+  if (hashMatch) {
+    return `version-${hashMatch[1]}`;
+  }
+  
+  // Pattern สำหรับเวอร์ชันเลข (เช่น 2.702.632, 2.702.622)
+  const numMatch = version.match(/(\d+\.\d+\.\d{3,4})/);
+  if (numMatch) {
+    let versionStr = numMatch[1];
+    
+    // ถ้ามี 4 หลักท้าย ให้ตัดเหลือ 3 หลัก
+    const parts = versionStr.split('.');
+    if (parts[2].length > 3) {
+      parts[2] = parts[2].substring(0, 3);
+      versionStr = parts.join('.');
+    }
+    
+    return versionStr;
+  }
+  
+  // ถ้าไม่ match pattern ใดเลย
   return version;
 };
 

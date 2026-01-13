@@ -26,11 +26,33 @@ const cleanVersion = (version) => {
     .replace(/^v\s*/i, '')
     .trim();
   
+  // Hash version
   const hashMatch = version.match(/(?:version-|ersion-)?([a-f0-9]{12,})/i);
   if (hashMatch) return `version-${hashMatch[1]}`;
   
+  // Numeric version - แก้ไขเฉพาะ pattern ที่ผิดปกติ
   const numMatch = version.match(/(\d+\.\d+\.\d{3,4})/);
-  if (numMatch) return numMatch[1];
+  if (numMatch) {
+    let versionStr = numMatch[1];
+    const parts = versionStr.split('.');
+    const lastPart = parts[2];
+    
+    // ✅ แก้ไขเฉพาะกรณีที่มี 4 หลักท้ายและดูผิดปกติ
+    if (lastPart.length === 4) {
+      // ถ้า 2 หลักท้ายซ้ำกัน (เช่น 22, 33, 44)
+      if (lastPart[2] === lastPart[3]) {
+        parts[2] = lastPart.substring(0, 3);
+        versionStr = parts.join('.');
+      }
+      // ถ้าเป็นเลขเดียวกันทั้ง 4 ตัว
+      else if (lastPart === lastPart[0].repeat(4)) {
+        parts[2] = lastPart.substring(0, 3);
+        versionStr = parts.join('.');
+      }
+    }
+    
+    return versionStr;
+  }
   
   return version;
 };
@@ -40,22 +62,28 @@ const isOnline = (element) => {
   return statusText.toLowerCase().includes("online");
 };
 
-// ✅ มีแค่ endpoint เดียวเท่านั้น
 app.get('/executors', async (req, res) => {
   try {
     const response = await axios.get(TARGET_URL);
     const $ = cheerio.load(response.data);
+
     const executors = [];
 
     $('.executor-card').each((i, el) => {
       const card = $(el);
+
       if (!isOnline(card)) return;
 
+      const name = deepText(card, '.executor-info h3');
+      const versionRaw = deepText(card, '.detail-item:contains("Version") .detail-value');
+      const version = cleanVersion(versionRaw); // ✅ ใช้ cleanVersion เดิม
+      const downloadLink = card.find('.card-actions a[href]').first().attr('href') || null;
+
       executors.push({ 
-        name: deepText(card, '.executor-info h3'),
-        version: cleanVersion(deepText(card, '.detail-item:contains("Version") .detail-value')),
+        name, 
+        version, 
         status: "Online", 
-        downloadLink: card.find('.card-actions a[href]').first().attr('href') || null
+        downloadLink 
       });
     });
 
@@ -65,6 +93,7 @@ app.get('/executors', async (req, res) => {
       count: executors.length,
       executor: executors
     });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ 

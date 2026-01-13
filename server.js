@@ -14,44 +14,24 @@ const deepText = (element, selector) => {
 const cleanVersion = (version) => {
   if (!version || version === "N/A") return "N/A";
   
-  // ทำความสะอาดเบื้องต้น
   version = version.replace(/\s+/g, ' ').trim();
   
-  // กรณีที่เป็น hash version ที่อาจขึ้นต้นด้วย "ersion" (ผิดพลาดจากต้นทาง)
   if (version.toLowerCase().includes('ersion')) {
-    // แก้ไขให้ถูกต้อง: เปลี่ยน e เป็น v
     version = version.replace(/^[eE]/, 'v');
   }
   
-  // ลบคำนำหน้าที่ไม่จำเป็น
   version = version
     .replace(/version:/i, '')
     .replace(/v:/i, '')
     .replace(/^v\s*/i, '')
     .trim();
   
-  // Pattern สำหรับเวอร์ชัน hash (เช่น version-5b077c09380f4fe6)
   const hashMatch = version.match(/(?:version-|ersion-)?([a-f0-9]{12,})/i);
-  if (hashMatch) {
-    return `version-${hashMatch[1]}`;
-  }
+  if (hashMatch) return `version-${hashMatch[1]}`;
   
-  // Pattern สำหรับเวอร์ชันเลข (เช่น 2.702.632, 2.702.622)
   const numMatch = version.match(/(\d+\.\d+\.\d{3,4})/);
-  if (numMatch) {
-    let versionStr = numMatch[1];
-    
-    // ถ้ามี 4 หลักท้าย ให้ตัดเหลือ 3 หลัก
-    const parts = versionStr.split('.');
-    if (parts[2].length > 3) {
-      parts[2] = parts[2].substring(0, 3);
-      versionStr = parts.join('.');
-    }
-    
-    return versionStr;
-  }
+  if (numMatch) return numMatch[1];
   
-  // ถ้าไม่ match pattern ใดเลย
   return version;
 };
 
@@ -60,28 +40,22 @@ const isOnline = (element) => {
   return statusText.toLowerCase().includes("online");
 };
 
+// ✅ มีแค่ endpoint เดียวเท่านั้น
 app.get('/executors', async (req, res) => {
   try {
     const response = await axios.get(TARGET_URL);
     const $ = cheerio.load(response.data);
-
     const executors = [];
 
     $('.executor-card').each((i, el) => {
       const card = $(el);
-
       if (!isOnline(card)) return;
 
-      const name = deepText(card, '.executor-info h3');
-      const versionRaw = deepText(card, '.detail-item:contains("Version") .detail-value');
-      const version = cleanVersion(versionRaw);
-      const downloadLink = card.find('.card-actions a[href]').first().attr('href') || null;
-
       executors.push({ 
-        name, 
-        version, 
+        name: deepText(card, '.executor-info h3'),
+        version: cleanVersion(deepText(card, '.detail-item:contains("Version") .detail-value')),
         status: "Online", 
-        downloadLink 
+        downloadLink: card.find('.card-actions a[href]').first().attr('href') || null
       });
     });
 
@@ -91,7 +65,6 @@ app.get('/executors', async (req, res) => {
       count: executors.length,
       executor: executors
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ 

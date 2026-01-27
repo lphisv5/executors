@@ -49,7 +49,8 @@ app.get('/executors', async (req, res) => {
       Android: [],
       iOS: [],
       Windows: [],
-      macOS: []
+      macOS: [],
+      External: []
     };
 
     let online = 0;
@@ -82,6 +83,7 @@ app.get('/executors', async (req, res) => {
       if (platformId === 'ios') result.iOS.push(data);
       if (platformId === 'windows') result.Windows.push(data);
       if (platformId === 'macos') result.macOS.push(data);
+      if (platformId === 'external') result.External.push(data);
     });
 
     res.json({
@@ -89,7 +91,8 @@ app.get('/executors', async (req, res) => {
       Android: result.Android,
       iOS: result.iOS,
       Windows: result.Windows,
-      macOS: result.macOS
+      macOS: result.macOS,
+      External: result.External
     });
 
   } catch (err) {

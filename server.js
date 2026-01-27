@@ -52,13 +52,13 @@ app.get('/executors', async (req, res) => {
       macOS: []
     };
 
-    let onlineCount = 0;
+    let online = 0;
 
     $('.executor-card').each((i, el) => {
       const card = $(el);
       if (!isOnline(card)) return;
 
-      onlineCount++;
+      online++;
 
       const name = deepText(card, '.executor-info h3');
       const versionRaw = deepText(

@@ -6,8 +6,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const TARGET_URL = 'https://executors.samrat.lol';
 
-/* ================= Utils ================= */
-
 const deepText = (element, selector) => {
   const found = element.find(selector);
   return found.length
@@ -17,8 +15,6 @@ const deepText = (element, selector) => {
 
 const cleanVersion = (version) => {
   if (!version || version === "N/A") return "N/A";
-
-  version = version.replace(/\s+/g, ' ').trim();
 
   version = version
     .replace(/version:/i, '')
@@ -40,11 +36,9 @@ const isOnline = (card) => {
   return statusText.toLowerCase().includes('online');
 };
 
-const detectPlatformBySection = (card) => {
-  return card.closest('.platform-section').attr('id');
-};
+const detectPlatformBySection = (card) =>
+  card.closest('.platform-section').attr('id');
 
-/* ================= API ================= */
 
 app.get('/executors', async (req, res) => {
   try {
@@ -58,9 +52,13 @@ app.get('/executors', async (req, res) => {
       macOS: []
     };
 
+    let onlineCount = 0;
+
     $('.executor-card').each((i, el) => {
       const card = $(el);
       if (!isOnline(card)) return;
+
+      onlineCount++;
 
       const name = deepText(card, '.executor-info h3');
       const versionRaw = deepText(
@@ -86,8 +84,13 @@ app.get('/executors', async (req, res) => {
       if (platformId === 'macos') result.macOS.push(data);
     });
 
-    // ✅ โครงสร้างเดิม: ส่ง object ตรง ไม่ห่อ
-    res.json(result);
+    res.json({
+      onlineCount,
+      Android: result.Android,
+      iOS: result.iOS,
+      Windows: result.Windows,
+      macOS: result.macOS
+    });
 
   } catch (err) {
     res.status(500).json({
@@ -96,8 +99,6 @@ app.get('/executors', async (req, res) => {
     });
   }
 });
-
-/* ================= Start ================= */
 
 app.listen(PORT, () => {
   console.log(`Executor Parser API running on port ${PORT}`);
